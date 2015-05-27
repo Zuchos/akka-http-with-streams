@@ -25,7 +25,7 @@ trait SimpleService {
   implicit val materializer: FlowMaterializer
 
   val dataPublisherRef = system.actorOf(Props[DataPublisher])
-  val dataPublisher = ActorPublisher[Data](dataPublisher)
+  val dataPublisher = ActorPublisher[Data](dataPublisherRef)
 
   Source(dataPublisher)
     .runForeach(
@@ -40,7 +40,7 @@ trait SimpleService {
       get {
         complete("Hello World!")
       }
-    }
+    } ~
     path("data") {
       (post & entity(as[String]) & parameter('sender.as[String])) {
         (dataAsString, sender: String) =>
