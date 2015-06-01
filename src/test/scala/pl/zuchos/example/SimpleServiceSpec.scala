@@ -15,6 +15,13 @@ class SimpleServiceSpec extends WordSpec with Matchers with ScalatestRouteTest w
         responseAs[String] shouldBe "Hello World!"
       }
     }
+    "respond with Data received" in {
+      Post("/data?sender=Lukasz", "Test") ~> routes ~> check {
+        status shouldBe OK
+        val entity: String = entityAs[String]
+        entity shouldBe "Data received"
+      }
+    }
   }
 
 }

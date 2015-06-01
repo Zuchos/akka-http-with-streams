@@ -4,12 +4,17 @@ import akka.actor.{ActorSystem, Props}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
 import akka.http.scaladsl.server.Directives._
+import akka.pattern.ask
 import akka.stream.actor.ActorPublisher
 import akka.stream.scaladsl.Source
 import akka.stream.{ActorFlowMaterializer, FlowMaterializer}
+import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
+import pl.zuchos.example.DataPublisher.Publish
 
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.util.{Failure, Success}
 
 /**
  * Simple 'Hello world!' service
@@ -23,8 +28,10 @@ trait SimpleService {
   implicit def executor: ExecutionContextExecutor
 
   implicit val materializer: FlowMaterializer
+  implicit val timeout = Timeout(5 seconds)
 
-  val dataPublisherRef = system.actorOf(Props[DataPublisher])
+
+  val dataPublisherRef = system.actorOf(Props[DataPublisher](new DataPublisher(1000)))
   val dataPublisher = ActorPublisher[Data](dataPublisherRef)
 
   Source(dataPublisher)
@@ -41,15 +48,20 @@ trait SimpleService {
         complete("Hello World!")
       }
     } ~
-    path("data") {
-      (post & entity(as[String]) & parameter('sender.as[String])) {
-        (dataAsString, sender: String) =>
-          complete {
-            dataPublisherRef ! Data(sender, dataAsString)
-            HttpResponse(StatusCodes.OK, entity = "Data received")
-          }
+      path("data") {
+        (post & entity(as[String]) & parameter('sender)) {
+          (dataAsString, sender: String) =>
+            complete {
+              val publisherResponse: Future[Any] = dataPublisherRef ? Publish(Data(sender, dataAsString))
+              publisherResponse.map {
+                case Success(_) => HttpResponse(StatusCodes.OK, entity = "Data received")
+                case Failure(_: BufferOverflow) => HttpResponse(StatusCodes.ServiceUnavailable, entity = "Try again later...")
+                case _ =>
+                  HttpResponse(StatusCodes.InternalServerError, entity = "Something gone terribly wrong...")
+              }
+            }
+        }
       }
-    }
   }
 }
 

@@ -6,18 +6,30 @@ import akka.stream.actor.ActorPublisherMessage.{Cancel, Request}
 import pl.zuchos.example.DataPublisher.Publish
 
 import scala.collection.mutable
+import scala.util.{Failure, Success}
 
-class DataPublisher extends ActorPublisher[Data] {
+class DataPublisher(val bufferSize: Int) extends ActorPublisher[Data] {
 
   var queue: mutable.Queue[Data] = mutable.Queue()
 
   override def receive: Actor.Receive = {
-    case Publish(s) => queue.enqueue(s)
-      publishIfNeeded()
+    case Publish(s) => {
+      cacheIfPossible(s)
+    }
     case Request(cnt) =>
       publishIfNeeded()
     case Cancel => context.stop(self)
     case _ =>
+  }
+
+  private def cacheIfPossible(s: Data) {
+    if (queue.length == bufferSize) {
+      sender() ! Failure(new BufferOverflow)
+    } else {
+      queue.enqueue(s)
+      sender() ! Success()
+      publishIfNeeded()
+    }
   }
 
   def publishIfNeeded() = {
@@ -26,6 +38,8 @@ class DataPublisher extends ActorPublisher[Data] {
     }
   }
 }
+
+class BufferOverflow extends Exception
 
 object DataPublisher {
 
