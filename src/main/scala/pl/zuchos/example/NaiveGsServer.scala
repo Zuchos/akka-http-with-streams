@@ -8,6 +8,7 @@ import akka.stream.actor.ActorPublisher
 import akka.stream.scaladsl.Source
 import akka.stream.{ActorFlowMaterializer, FlowMaterializer}
 import com.typesafe.config.ConfigFactory
+import pl.zuchos.example.DataPublisher.Publish
 
 import scala.concurrent.ExecutionContextExecutor
 
@@ -41,15 +42,15 @@ trait SimpleService {
         complete("Hello World!")
       }
     } ~
-    path("data") {
-      (post & entity(as[String]) & parameter('sender.as[String])) {
-        (dataAsString, sender: String) =>
-          complete {
-            dataPublisherRef ! Data(sender, dataAsString)
-            HttpResponse(StatusCodes.OK, entity = "Data received")
-          }
+      path("data") {
+        (post & entity(as[String]) & parameter('sender.as[String])) {
+          (dataAsString, sender: String) =>
+            complete {
+              dataPublisherRef ! Publish(Data(sender, dataAsString))
+              HttpResponse(StatusCodes.OK, entity = "Data received")
+            }
+        }
       }
-    }
   }
 }
 
