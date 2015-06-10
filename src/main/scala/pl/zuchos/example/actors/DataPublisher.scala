@@ -15,7 +15,7 @@ class DataPublisher[D](val bufferSize: Int) extends ActorPublisher[D] {
   var queue: mutable.Queue[D] = mutable.Queue()
 
   override def receive: Actor.Receive = {
-    case Publish(s:D) =>
+    case Publish(s: D) =>
       cacheIfPossible(s)
     case Request(cnt) =>
       publishIfNeeded()
