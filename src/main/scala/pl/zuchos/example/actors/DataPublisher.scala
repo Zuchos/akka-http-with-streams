@@ -47,5 +47,3 @@ object DataPublisher {
   case class Publish[D](data: D)
 
 }
-
-case class Data(sender: String, body: String)
