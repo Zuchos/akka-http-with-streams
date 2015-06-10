@@ -15,10 +15,10 @@ import scala.concurrent.ExecutionContextExecutor
 class SimpleServiceSpec extends WordSpec with Matchers with ScalatestRouteTest with BeforeAndAfterEach {
 
   val that = this
-  var simpleService: SimpleService = _
+  var simpleService: SimpleService[Data] = _
 
   override protected def beforeEach(): Unit = {
-    simpleService = new SimpleService {
+    simpleService = new SimpleService[Data] {
 
       override def publisherBufferSize: Int = 2
 

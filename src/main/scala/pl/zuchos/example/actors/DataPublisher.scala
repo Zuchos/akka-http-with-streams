@@ -8,14 +8,14 @@ import pl.zuchos.example.actors.DataPublisher.Publish
 import scala.collection.mutable
 import scala.util.{Failure, Success}
 
-class DataPublisher(val bufferSize: Int) extends ActorPublisher[Data] {
+class DataPublisher[D](val bufferSize: Int) extends ActorPublisher[D] {
 
   if (bufferSize <= 0) throw new IllegalArgumentException("Buffer should be positive number...")
 
-  var queue: mutable.Queue[Data] = mutable.Queue()
+  var queue: mutable.Queue[D] = mutable.Queue()
 
   override def receive: Actor.Receive = {
-    case Publish(s) =>
+    case Publish(s:D) =>
       cacheIfPossible(s)
     case Request(cnt) =>
       publishIfNeeded()
@@ -23,7 +23,7 @@ class DataPublisher(val bufferSize: Int) extends ActorPublisher[Data] {
     case _ =>
   }
 
-  private def cacheIfPossible(s: Data) {
+  private def cacheIfPossible(s: D) {
     if (queue.length == bufferSize) {
       sender() ! Failure(new BufferOverflow)
     } else {
@@ -44,7 +44,7 @@ class BufferOverflow extends Exception
 
 object DataPublisher {
 
-  case class Publish(data: Data)
+  case class Publish[D](data: D)
 
 }
 
