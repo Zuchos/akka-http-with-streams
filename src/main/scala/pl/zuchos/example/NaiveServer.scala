@@ -21,7 +21,7 @@ import scala.util.{Failure, Success}
 /**
  * Simple 'Hello world!' service
  */
-trait SimpleService[D] {
+trait SimpleService {
 
   // Using the same names as in RouteTest we are making life easier
   // (no need to override them in test classes)
@@ -33,12 +33,12 @@ trait SimpleService[D] {
 
   implicit val timeout = Timeout(1 seconds)
 
-  def dataProcessingDefinition: Sink[D, Unit]
+  def dataProcessingDefinition: Sink[Data, Unit]
 
   def publisherBufferSize: Int
 
-  val dataPublisherRef = system.actorOf(Props[DataPublisher[Data]](new DataPublisher[Data](publisherBufferSize)))
-  val dataPublisher = ActorPublisher[D](dataPublisherRef)
+  val dataPublisherRef = system.actorOf(Props[DataPublisher](new DataPublisher(publisherBufferSize)))
+  val dataPublisher = ActorPublisher[Data](dataPublisherRef)
 
   Source(dataPublisher).runWith(dataProcessingDefinition)
 
@@ -68,7 +68,7 @@ trait SimpleService[D] {
 /**
  * Server that runs our service
  */
-object NaiveServer extends App with SimpleService[Data] {
+object NaiveServer extends App with SimpleService {
 
   override implicit lazy val system = ActorSystem()
   override implicit lazy val executor = system.dispatcher
