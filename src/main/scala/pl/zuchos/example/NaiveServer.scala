@@ -2,15 +2,17 @@ package pl.zuchos.example
 
 import akka.actor.{ActorSystem, Props}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpResponse, StatusCodes}
+import akka.http.scaladsl.model.HttpResponse
+import akka.http.scaladsl.model.StatusCodes.{Accepted, InternalServerError, ServiceUnavailable}
 import akka.http.scaladsl.server.Directives._
 import akka.pattern.ask
 import akka.stream.actor.ActorPublisher
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{Flow, Sink, Source}
 import akka.stream.{ActorFlowMaterializer, FlowMaterializer}
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
-import pl.zuchos.example.DataPublisher.Publish
+import pl.zuchos.example.actors.DataPublisher.Publish
+import pl.zuchos.example.actors.{BufferOverflow, Data, DataPublisher}
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContextExecutor, Future}
@@ -28,19 +30,17 @@ trait SimpleService {
   implicit def executor: ExecutionContextExecutor
 
   implicit val materializer: FlowMaterializer
-  implicit val timeout = Timeout(5 seconds)
 
+  implicit val timeout = Timeout(1 seconds)
 
-  val dataPublisherRef = system.actorOf(Props[DataPublisher](new DataPublisher(1000)))
+  def dataProcessingDefinition: Sink[Data, Unit]
+
+  def publisherBufferSize: Int
+
+  val dataPublisherRef = system.actorOf(Props[DataPublisher](new DataPublisher(publisherBufferSize)))
   val dataPublisher = ActorPublisher[Data](dataPublisherRef)
 
-  Source(dataPublisher)
-    .runForeach(
-      (x: Data) =>
-        println(s"Data from ${x.sender} are being processed: ${x.body}")
-    )
-    .onComplete(_ => system.shutdown())
-
+  Source(dataPublisher).runWith(dataProcessingDefinition)
 
   val routes = {
     path("hello") {
@@ -54,10 +54,10 @@ trait SimpleService {
             complete {
               val publisherResponse: Future[Any] = dataPublisherRef ? Publish(Data(sender, dataAsString))
               publisherResponse.map {
-                case Success(_) => HttpResponse(StatusCodes.OK, entity = "Data received")
-                case Failure(_: BufferOverflow) => HttpResponse(StatusCodes.ServiceUnavailable, entity = "Try again later...")
+                case Success(_) => HttpResponse(Accepted, entity = "Data received")
+                case Failure(_: BufferOverflow) => HttpResponse(ServiceUnavailable, entity = "Try again later...")
                 case _ =>
-                  HttpResponse(StatusCodes.InternalServerError, entity = "Something gone terribly wrong...")
+                  HttpResponse(InternalServerError, entity = "Something gone terribly wrong...")
               }
             }
         }
@@ -68,16 +68,20 @@ trait SimpleService {
 /**
  * Server that runs our service
  */
-object NaiveGsServer extends App with SimpleService {
+object NaiveServer extends App with SimpleService {
 
-  override implicit val system = ActorSystem()
+  override implicit lazy val system = ActorSystem()
+  override implicit lazy val executor = system.dispatcher
+  override implicit lazy val materializer = ActorFlowMaterializer()
 
-  override implicit val executor = system.dispatcher
+  override def dataProcessingDefinition: Sink[Data, Unit] = Flow[Data].map(d => {
+    println(d)
+    d
+  }).to(Sink.ignore)
 
-  override implicit val materializer = ActorFlowMaterializer()
+  override def publisherBufferSize: Int = 1000
 
   val config = ConfigFactory.load()
-
   Http().bindAndHandle(routes, config.getString("http.host"), config.getInt("http.port"))
 
 }
