@@ -10,12 +10,12 @@ import scala.util.{Failure, Success}
 
 class DataPublisher[D](val bufferSize: Int) extends ActorPublisher[D] {
 
-  if (bufferSize <= 0) throw new IllegalArgumentException("Buffer should be positive number...")
+  require(bufferSize >= 0)
 
   var queue: mutable.Queue[D] = mutable.Queue()
 
   override def receive: Actor.Receive = {
-    case Publish(s: D @unchecked) =>
+    case Publish(s: D@unchecked) =>
       cacheIfPossible(s)
     case Request(cnt) =>
       publishIfNeeded()

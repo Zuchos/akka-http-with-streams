@@ -1,6 +1,6 @@
 package pl.zuchos.example
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.http.scaladsl.model.StatusCodes.{Accepted, ServiceUnavailable}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.stream.actor.ActorSubscriber
@@ -14,26 +14,25 @@ import scala.concurrent.ExecutionContextExecutor
 class SimpleServiceSpec extends WordSpec with Matchers with ScalatestRouteTest with BeforeAndAfterEach {
 
   val that = this
-  var simpleService: RestService[Data] = _
+  var simpleService: DataService with PublisherService[Data] = _
 
   override protected def beforeEach(): Unit = {
-    simpleService = new DataService {
-
-      override def publisherBufferSize: Int = 2
-
-      override implicit def executor: ExecutionContextExecutor = that.executor
-
-      override implicit lazy val materializer: FlowMaterializer = that.materializer
-      override implicit lazy val system: ActorSystem = that.system
-
+    simpleService = new DataService with PublisherService[Data] {
+      
       lazy val dataSubscriberRef = system.actorOf(Props[LazyDataSubscriber](new LazyDataSubscriber()))
       lazy val dataSubscriber = ActorSubscriber[Data](dataSubscriberRef)
-
+      
+      override implicit lazy val system: ActorSystem = that.system
+      override implicit lazy val materializer: FlowMaterializer = that.materializer
+      override implicit def executor: ExecutionContextExecutor = that.executor
+      override def publisherBufferSize: Int = 2
       override def dataProcessingDefinition: Sink[Data, Unit] = Flow[Data].map(d => {
         println(s"Processing data from ${d.sender} body: ${d.body}")
         d
       }).to(Sink(dataSubscriber)).withAttributes(OperationAttributes.inputBuffer(1, 1))
     }
+    simpleService.run()
+
   }
 
   "SimpleService" should {
